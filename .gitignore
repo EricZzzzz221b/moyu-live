@@ -1,0 +1,23 @@
+# 依赖与构建产物
+node_modules/
+dist/
+.npm-cache/
+.electron-cache/
+.builder-cache/
+.userdata/
+
+# 登录态与本地配置（绝对不要提交）
+.cookie.json
+.data/
+run.log
+
+# 早期验证脚本（含登录态导入实验，正式版本已并入 moyu/bin/auth.mjs）
+moyu-spike/
+
+# 与项目无关的私人文件
+明日香.md
+.DS_Store
+
+# 已废弃的 Swift 版热键助手（功能并入 Electron 桌面端）
+moyu/bin/moyu-quick
+moyu/native/

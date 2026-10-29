@@ -1,0 +1,3 @@
+- insert:
+    - id: moyu-live
+      name: '@local/moyu-live'

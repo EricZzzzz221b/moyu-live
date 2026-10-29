@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<style>
+  html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; }
+  body { display: flex; align-items: center; padding: 8px; box-sizing: border-box; font: 15px/1.4 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; }
+  .card {
+    width: 100%;
+    background: rgba(18, 20, 26, 0.98);
+    border: 1px solid rgba(255,255,255,0.13);
+    border-radius: 16px;
+    box-shadow: 0 18px 50px rgba(0,0,0,0.55);
+    padding: 14px 16px 10px;
+    box-sizing: border-box;
+    -webkit-app-region: drag;
+  }
+  input {
+    width: 100%; border: 0; outline: none; background: transparent;
+    color: #f0f2f7; font-size: 16px; -webkit-app-region: no-drag;
+  }
+  input::placeholder { color: #6b7280; }
+  .hint { margin-top: 6px; color: #6b7280; font-size: 11px; -webkit-app-region: no-drag; }
+  .hint.err { color: #f2777a; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <input id="text" maxlength="40" placeholder="发条弹幕，回车发送" autocomplete="off" spellcheck="false" />
+    <div class="hint" id="hint">回车发送 · Esc 关闭</div>
+  </div>
+<script>
+  const input = document.getElementById('text');
+  const hint = document.getElementById('hint');
+  let busy = false;
+
+  window.moyu.onFocus(() => {
+    input.value = '';
+    hint.className = 'hint';
+    hint.textContent = '回车发送 · Esc 关闭';
+    input.focus();
+  });
+  input.focus();
+
+  window.addEventListener('keydown', async (e) => {
+    if (e.key === 'Escape') {
+      window.moyu.hide();
+      return;
+    }
+    if (e.key !== 'Enter' || busy) return;
+
+    const text = input.value.trim();
+    if (!text) { window.moyu.hide(); return; }
+
+    busy = true;
+    hint.className = 'hint';
+    hint.textContent = '发送中…';
+    const r = await window.moyu.send(text);
+    busy = false;
+
+    if (r && r.ok) {
+      input.value = '';
+      hint.textContent = '已发送 ✓';
+      setTimeout(() => window.moyu.hide(), 400);
+    } else {
+      hint.className = 'hint err';
+      hint.textContent = (r && r.error) || '发送失败';
+    }
+  });
+</script>
+</body>
+</html>

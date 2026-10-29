@@ -1,0 +1,507 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>moyu live</title>
+<style>
+  :root {
+    --bg: #0e0f13;
+    --panel: #16181f;
+    --line: #262a35;
+    --text: #e6e8ee;
+    --dim: #8b91a1;
+    --accent: #4f8cff;
+    --ok: #35c48a;
+    --warn: #f2a13c;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font: 14px/1.5 -apple-system, "PingFang SC", "Helvetica Neue", sans-serif;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 14px;
+    border-bottom: 1px solid var(--line);
+    background: var(--panel);
+    flex: 0 0 auto;
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--dim); flex: 0 0 auto; }
+  .dot.live { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
+  .dot.off { background: #5a6070; }
+  #title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #meta { color: var(--dim); font-size: 12px; white-space: nowrap; }
+  .spacer { flex: 1; }
+  button {
+    background: #232735; color: var(--text); border: 1px solid var(--line);
+    border-radius: 6px; padding: 5px 10px; cursor: pointer; font-size: 13px;
+  }
+  button:hover { background: #2b3042; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.primary:disabled { opacity: .5; cursor: default; }
+
+  main { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 12px; }
+  #stage {
+    position: relative;
+    background: #000;
+    border-radius: 10px;
+    overflow: hidden;
+    max-width: 100%;
+    max-height: 100%;
+    aspect-ratio: 16 / 9;
+    width: min(100%, 1100px);
+  }
+  #stage.portrait { aspect-ratio: 9 / 16; width: auto; height: 100%; }
+  #stage video { width: 100%; height: 100%; display: block; object-fit: contain; background: #000; }
+  #unmute {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    background: rgba(20,22,30,.82); border: 1px solid var(--line); border-radius: 10px;
+    padding: 14px 18px; font-size: 14px; display: none; z-index: 5;
+  }
+  #stage.paused #unmute { display: block; }
+  #toast {
+    position: fixed; left: 50%; bottom: 74px; transform: translateX(-50%);
+    background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+    padding: 8px 14px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 20;
+  }
+  #toast.show { opacity: 1; }
+  #toast.err { border-color: #7a3340; }
+  #toast.warn { border-color: #7a5f33; }
+  footer {
+    flex: 0 0 auto; display: flex; gap: 8px; padding: 10px 14px;
+    border-top: 1px solid var(--line); background: var(--panel);
+  }
+  #input {
+    flex: 1; background: #0f1116; border: 1px solid var(--line); color: var(--text);
+    border-radius: 8px; padding: 9px 12px; font-size: 14px; outline: none;
+  }
+  #input:focus { border-color: var(--accent); }
+  #count { color: var(--dim); font-size: 12px; align-self: center; min-width: 38px; text-align: right; }
+  #empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--dim); font-size: 13px; }
+
+
+  /* 嵌入 DSH 小窗时：只剩画面和一行输入框 */
+  body.embed header { display: none; }
+  body.embed main { padding: 0; }
+  body.embed #stage { border-radius: 0; width: 100%; height: 100%; max-height: none; aspect-ratio: auto; }
+  body.embed footer { padding: 6px 8px; gap: 6px; }
+  body.embed #count { display: none; }
+  body.embed #toast { bottom: 52px; font-size: 12px; padding: 6px 10px; }
+  body.bare header, body.bare footer { display: none; }
+  body.bare main { padding: 0; }
+  body.bare #stage { width: 100%; height: 100%; max-height: none; aspect-ratio: auto; border-radius: 0; }
+  .side-ad {
+    position: absolute; top: 0; bottom: 0; z-index: 5; display: none;
+    flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+    pointer-events: none; overflow: hidden;
+    background: linear-gradient(180deg, #ff4f2d 0%, #ff8f3d 45%, #ffc24d 100%);
+    background-size: 100% 220%;
+    color: #fff;
+    animation: adFlow 5.5s ease-in-out infinite;
+  }
+  @keyframes adFlow {
+    0%, 100% { background-position: 0% 0%; }
+    50% { background-position: 0% 100%; }
+  }
+  /* 斜向扫光，动效广告最常见的那一层 */
+  .side-ad::after {
+    content: '';
+    position: absolute; top: -60%; bottom: -60%; left: -140%; width: 120%;
+    background: linear-gradient(100deg, transparent 40%, rgba(255,255,255,0.42) 50%, transparent 60%);
+    animation: adShine 3.8s linear infinite;
+  }
+  @keyframes adShine {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(320%); }
+  }
+  .side-ad .vtext {
+    writing-mode: vertical-rl; letter-spacing: 3px; font-weight: 800; font-size: 20px;
+    text-shadow: 0 1px 3px rgba(120,40,0,0.45);
+    animation: adPulse 2.6s ease-in-out infinite;
+    transform-origin: center;
+  }
+  @keyframes adPulse {
+    0%, 100% { transform: scale(1); opacity: 0.92; }
+    45% { transform: scale(1.24); opacity: 1; text-shadow: 0 0 14px rgba(255,255,255,0.75); }
+  }
+  .side-ad .price {
+    font-size: 26px; font-weight: 900; line-height: 1;
+    animation: adBounce 1.9s ease-in-out infinite;
+  }
+  @keyframes adBounce {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.32); color: #fffbe8; }
+  }
+  .side-ad .price small { font-size: 12px; font-weight: 600; }
+  .side-ad .btn {
+    writing-mode: vertical-rl; background: #fff; color: #d9482b; border-radius: 12px;
+    padding: 8px 5px; font-size: 12px; font-weight: 800; letter-spacing: 2px;
+    animation: adBlink 1.7s steps(1, end) infinite;
+  }
+  @keyframes adBlink {
+    0%, 68% { opacity: 1; box-shadow: 0 0 0 rgba(255,255,255,0); }
+    69%, 100% { opacity: 0.55; box-shadow: 0 0 14px rgba(255,255,255,0.7); }
+  }
+  .side-ad .tiny {
+    font-size: 9px; opacity: .75; letter-spacing: 1px;
+    animation: adFade 3.2s ease-in-out infinite;
+  }
+  @keyframes adFade {
+    0%, 100% { opacity: 0.45; }
+    50% { opacity: 1; }
+  }
+
+  /* 左右错开节奏，避免两边同时跳 */
+  #adL .vtext { animation-delay: 0s; }
+  #adR .vtext { animation-delay: 0.9s; }
+  #adL .price { animation-delay: 0.2s; }
+  #adR .price { animation-delay: 1.1s; }
+  #adL::after { animation-delay: 0s; }
+  #adR::after { animation-delay: 1.9s; }
+
+  #src {
+    position: absolute; left: 8px; bottom: 8px; z-index: 7; pointer-events: none;
+    font-size: 11px; color: rgba(220,225,235,0.55); background: rgba(0,0,0,0.35);
+    padding: 2px 6px; border-radius: 5px; font-variant-numeric: tabular-nums;
+  }
+  body.embed #unmute { display: none !important; }
+</style>
+</head>
+<body>
+<header>
+  <span class="dot" id="dot"></span>
+  <div id="title">加载中…</div>
+  <div id="meta"></div>
+  <div class="spacer"></div>
+  <button id="mute">🔊 声音</button>
+</header>
+
+<main>
+  <div id="stage">
+    <div id="dragbar" title="拖动移动窗口"></div>
+    <div id="src">…</div>
+    <div class="side-ad" id="adL">
+      <div class="tiny">广告</div>
+      <div class="vtext">限时秒杀</div>
+      <div class="price"><small>¥</small>0</div>
+      <div class="btn">立即抢</div>
+    </div>
+    <div class="side-ad" id="adR">
+      <div class="tiny">广告</div>
+      <div class="vtext">新人专享</div>
+      <div class="price"><small>¥</small>0</div>
+      <div class="btn">去领取</div>
+    </div>
+    <video id="video" playsinline muted></video>
+    <div id="empty">等待画面…</div>
+    <button id="unmute" class="primary">点击开启声音 ▶</button>
+  </div>
+</main>
+
+<footer>
+  <input id="input" maxlength="40" placeholder="发条弹幕，回车发送" autocomplete="off" />
+  <span id="count">0/40</span>
+  <button id="sound" title="切换声音">🔇 开声</button>
+  <button id="send" class="primary">发送</button>
+</footer>
+<div id="toast"></div>
+
+<script src="hls.min.js"></script>
+<script src="mpegts.js"></script>
+<script>
+const $ = (id) => document.getElementById(id);
+const stage = $('stage'), video = $('video'), input = $('input');
+let state = null, hls = null, flv = null, srcKey = '';
+
+if (location.search.includes('embed')) document.body.classList.add('embed');
+if (location.search.includes('bare')) document.body.classList.add('embed', 'bare');
+
+function toast(msg, kind) {
+  const el = $('toast');
+  el.textContent = msg;
+  el.className = 'show ' + (kind || '');
+  clearTimeout(el._t);
+  el._t = setTimeout(() => { el.className = ''; }, 3200);
+}
+
+function renderState(s) {
+  state = s;
+  $('dot').className = 'dot ' + (s.live ? 'live' : 'off');
+  $('title').textContent = s.title || ('房间 ' + s.roomId);
+  $('meta').textContent = [
+    s.live ? '直播中' : '未开播',
+    s.online ? s.online + ' 人在线' : '',
+    s.portrait ? '竖屏' : '',
+    s.uname ? s.uname : '未登录',
+    s.jarOk ? '' : '（无 cookie，不能发弹幕）',
+  ].filter(Boolean).join(' · ');
+
+  stage.classList.toggle('portrait', Boolean(s.portrait));
+
+  // 房间号必须进 key：切直播间要重建；但同一房间的播放地址刷新（每 10 分钟）不重建。
+  // FLV 走固定的 /live.flv，HLS 必须跟地址。
+  const key = s.live
+    ? `${s.roomId}:` + (s.hasFlv ? 'flv' : 'hls:' + (s.playUrl || ''))
+    : `${s.roomId}:off`;
+  if (key && key !== srcKey) {
+    srcKey = key;
+    attach(s);
+  }
+  if (!s.live) {
+    $('empty').style.display = 'flex';
+    $('empty').textContent = '房间未开播';
+  } else if (!s.playUrl) {
+    $('empty').style.display = 'flex';
+    $('empty').textContent = '直播中，但没拿到播放地址…';
+  } else {
+    $('empty').style.display = 'none';
+  }
+}
+
+let attachAt = 0;
+
+function teardown() {
+  if (hls) {
+    try { hls.destroy(); } catch {}
+    hls = null;
+  }
+  if (flv) {
+    try { flv.destroy(); } catch {}
+    flv = null;
+  }
+}
+
+let sourceMode = '';
+let sideAds = false;
+
+function layoutSideAds() {
+  const left = $('adL');
+  const right = $('adR');
+  if (!left || !right) return;
+  const boxW = stage.clientWidth;
+  const boxH = stage.clientHeight;
+  const vw = video.videoWidth;
+  const vh = video.videoHeight;
+  if (!sideAds || !vw || !vh || !boxW || !boxH) {
+    left.style.display = 'none';
+    right.style.display = 'none';
+    return;
+  }
+  const scale = Math.min(boxW / vw, boxH / vh);
+  const bar = Math.max(0, (boxW - vw * scale) / 2 - 6);
+  if (bar < 70) {
+    left.style.display = 'none';
+    right.style.display = 'none';
+    return;
+  }
+  for (const el of [left, right]) {
+    el.style.display = 'flex';
+    el.style.width = bar + 'px';
+    el.style.fontSize = Math.min(20, Math.max(11, bar / 6)) + 'px';
+  }
+  left.style.left = '0';
+  right.style.right = '0';
+}
+
+function attach(s) {
+  attachAt = Date.now();
+  teardown();
+
+  // 优先 FLV：B 站网页用的就是它，延迟 1 秒级；HLS 会落后 6~8 秒。
+  // FLV 由本地守护进程转发（CDN 直连带 Origin 会 403）。
+  sourceMode = 'HLS';
+
+  if (s.hasFlv && window.mpegts && mpegts.isSupported()) {
+    sourceMode = 'FLV';
+    flv = mpegts.createPlayer(
+      { type: 'flv', isLive: true, url: 'live.flv' },
+      {
+        enableStashBuffer: false,
+        stashInitialSize: 128,
+        // 实时追赶：一旦落后超过 maxLatency 就跳到直播边缘
+        liveBufferLatencyChasing: true,
+        // 追得太狠会不断 seek，反而更卡；留一点余量
+        liveBufferLatencyMaxLatency: 1.6,
+        liveBufferLatencyMinRemain: 0.5,
+        lazyLoad: false,
+        autoCleanupSourceBuffer: true,
+        enableWorker: false,
+      },
+    );
+    flv.attachMediaElement(video);
+    flv.load();
+    flv.on(mpegts.Events.ERROR, (type, detail) => {
+      toast('FLV 播放出错：' + detail, 'err');
+      // 退回到 HLS，别让画面彻底没了
+      teardown();
+      if (s.playUrl) attachHls(s.playUrl);
+    });
+    video.play().catch(() => stage.classList.add('paused'));
+    return;
+  }
+  attachHls(s.playUrl);
+}
+
+setInterval(() => {
+  const el = $('src');
+  if (!el) return;
+  let buf = 0;
+  try {
+    if (video.buffered.length) buf = video.buffered.end(video.buffered.length - 1) - video.currentTime;
+  } catch {}
+  el.textContent = (sourceMode || '—') + ' 缓冲 ' + buf.toFixed(1) + 's';
+}, 1000);
+
+function attachHls(url) {
+  if (window.Hls && Hls.isSupported()) {
+    hls = new Hls({
+      lowLatencyMode: true,
+      liveSyncDurationCount: 2,
+      liveMaxLatencyDurationCount: 4,
+      maxBufferLength: 6,
+      backBufferLength: 0,
+    });
+    hls.loadSource(url);
+    hls.attachMedia(video);
+    hls.on(Hls.Events.ERROR, (_, data) => {
+      if (!data.fatal) return;
+      const box = $('empty');
+      box.style.display = 'flex';
+      box.textContent = '画面出错：' + (data.details || data.type) + (data.reason ? ' / ' + data.reason : '');
+      toast('画面出错：' + data.type, 'err');
+    });
+  } else {
+    video.src = url;
+  }
+  video.play().catch(() => stage.classList.add('paused'));
+}
+
+video.addEventListener('error', () => {
+  const e = video.error;
+  const box = $('empty');
+  box.style.display = 'flex';
+  box.textContent = '视频错误：' + (e ? 'code ' + e.code + ' ' + (e.message || '') : '未知');
+});
+// 桌面外壳在隐藏窗口时会让我们暂停，避免"窗口没了声音还在"
+window.addEventListener('message', (e) => {
+  const type = e.data && e.data.type;
+  if (type === 'moyu:pause') video.pause();
+  if (type === 'moyu:play') video.play().catch(() => {});
+  if (type === 'moyu:unmute') { video.muted = false; video.play().catch(() => {}); }
+  if (type === 'moyu:mute') video.muted = true;
+  if (type === 'moyu:sideads') {
+    sideAds = Boolean(e.data.on);
+    layoutSideAds();
+    // 给个可见反馈：黑边太窄时也能知道开关收到了
+    const anyShown = $('adL').style.display === 'flex';
+    toast(sideAds ? (anyShown ? '侧栏广告已开' : '侧栏广告已开（当前没有黑边空间）') : '侧栏广告已关');
+  }
+});
+
+stage.addEventListener('click', () => {
+  if (video.paused) video.play().catch(() => {});
+});
+
+video.addEventListener('loadedmetadata', layoutSideAds);
+window.addEventListener('resize', layoutSideAds);
+
+video.addEventListener('playing', () => {
+  stage.classList.remove('paused');
+  $('empty').style.display = 'none';
+});
+
+video.addEventListener('pause', () => {
+  if (video.ended || !state || !state.live) return;
+  $('empty').style.display = 'flex';
+  $('empty').textContent = '▶ 点击播放';
+});
+video.addEventListener('pause', () => stage.classList.add('paused'));
+
+function setMuted(m) {
+  video.muted = m;
+  const btn = $('sound');
+  btn.textContent = m ? '🔇 开声' : '🔊 声音';
+  btn.classList.toggle('on', !m);
+  const top = $('mute');
+  if (top) top.textContent = m ? '🔇 静音' : '🔊 声音';
+}
+function unmute() {
+  setMuted(false);
+  video.play().catch(() => {});
+  stage.classList.remove('paused');
+}
+
+$('sound').onclick = (e) => { e.stopPropagation(); if (video.muted) unmute(); else setMuted(true); };
+$('mute').onclick = () => { if (video.muted) unmute(); else setMuted(true); };
+$('unmute').onclick = () => unmute();
+
+// 浏览器要求用户手势才能出声：第一次点页面任意处就顺手打开声音
+document.addEventListener('pointerdown', (e) => {
+  if (e.target && e.target.closest && e.target.closest('button')) return; // 按钮自己管
+  if (video.muted) unmute();
+}, { capture: true, once: true });
+
+setMuted(true);
+
+// ---- SSE ----
+const es = new EventSource('api/stream');
+es.addEventListener('state', (e) => renderState(JSON.parse(e.data)));
+es.onerror = () => { $('dot').className = 'dot off'; };
+
+// ---- 发送 ----
+function updateCount() { $('count').textContent = [...input.value].length + '/40'; }
+input.addEventListener('input', updateCount);
+input.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') send();
+});
+
+async function send() {
+  const text = input.value.trim();
+  if (!text) return;
+
+  // 像正常输入框：回车立刻清空，结果稍后用 toast 告诉你
+  input.value = '';
+  updateCount();
+  input.focus();
+
+  try {
+    const r = await fetch('api/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+    });
+    const d = await r.json();
+    if (!d.ok) {
+      toast(d.error || '发送失败', 'err');
+      if (!input.value) { input.value = text; updateCount(); }
+    } else {
+      toast('已发送 ✓');
+    }
+  } catch (e) {
+    toast('发送失败：' + e.message, 'err');
+    if (!input.value) { input.value = text; updateCount(); }
+  }
+}
+$('send').onclick = send;
+
+setInterval(() => {
+  if (!attachAt || !state || !state.live) return;
+  if (video.readyState >= 2 || video.paused) return;
+  if (Date.now() - attachAt < 6000) return;
+  $('empty').style.display = 'flex';
+  $('empty').textContent = '画面 6 秒未就绪（readyState=' + video.readyState + '），试试点一下画面';
+}, 3000);
+
+// 先拿一次状态，SSE 可能稍后才有数据
+fetch('api/state').then((r) => r.json()).then(renderState).catch(() => {});
+</script>
+</body>
+</html>

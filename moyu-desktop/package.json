@@ -1,0 +1,58 @@
+{
+  "name": "moyu-live-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "摸鱼直播：跨平台置顶播放器 + 快速弹幕",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist:win": "electron-builder --win zip --x64",
+    "dist:mac": "electron-builder --mac zip"
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^26.18.0"
+  },
+  "build": {
+    "appId": "com.moyulive.desktop",
+    "productName": "moyu-live",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "player-preload.js",
+      "player.html",
+      "input.html",
+      "assets/**",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "zip"
+      ],
+      "icon": "build/icon.png"
+    },
+    "mac": {
+      "target": [
+        "zip"
+      ],
+      "category": "public.app-category.entertainment",
+      "icon": "build/icon.png"
+    },
+    "extraResources": [
+      {
+        "from": "../moyu",
+        "to": "moyu",
+        "filter": [
+          "bin/**",
+          "src/**",
+          "public/**"
+        ]
+      }
+    ]
+  },
+  "author": "moyu-live contributors"
+}
