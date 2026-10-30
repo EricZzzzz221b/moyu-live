@@ -3,13 +3,21 @@
 <head>
 <meta charset="utf-8" />
 <style>
+  :root {
+    --ad-1: #ff5f3d; --ad-2: #ff8f3d; --ad-3: #ffb03d;
+    --ad-ink: #d9482b;
+  }
+  body.skin-bug {
+    --ad-1: #0c6e34; --ad-2: #1a8f47; --ad-3: #46b96a;
+    --ad-ink: #0c6e34;
+  }
   html, body { margin: 0; height: 100%; background: #0e0f13; overflow: hidden; }
   body {
     display: flex; flex-direction: column;
     font: 12px/1.4 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
     color: #cfd4e0;
     /* 广告外层：橙色描边 + 内侧高光，模仿常见的推广弹窗 */
-    border: 2px solid #ff6a3d;
+    border: 2px solid var(--ad-1);
     box-shadow: inset 0 0 0 1px rgba(255,255,255,0.12);
     box-sizing: border-box;
   }
@@ -19,7 +27,7 @@
     position: relative;
     height: 44px; flex: 0 0 auto; display: flex; align-items: center; gap: 6px;
     padding: 0 6px 0 8px;
-    background: linear-gradient(90deg, #ff5f3d 0%, #ff8f3d 55%, #ffb03d 100%);
+    background: linear-gradient(90deg, var(--ad-1) 0%, var(--ad-2) 55%, var(--ad-3) 100%);
     -webkit-app-region: drag; user-select: none;
     color: #fff;
   }
@@ -63,7 +71,7 @@
   #promo .p1 { font-size: 17px; font-weight: 800; letter-spacing: 1px; text-shadow: 0 1px 2px rgba(120,40,0,0.4); }
   #promo .p2 { font-size: 12px; opacity: .92; font-variant-numeric: tabular-nums; }
   #promo .cta2 {
-    margin-left: auto; background: #fff; color: #d9482b; border-radius: 15px;
+    margin-left: auto; background: #fff; color: var(--ad-ink); border-radius: 15px;
     padding: 6px 16px; font-size: 13px; font-weight: 800;
     box-shadow: 0 3px 10px rgba(120,40,0,0.3);
   }
@@ -71,7 +79,7 @@
   #close {
     -webkit-app-region: no-drag;
     width: 18px; height: 18px; line-height: 16px; padding: 0; border-radius: 4px;
-    background: rgba(255,255,255,0.9); color: #d9482b; font-weight: 700; font-size: 12px;
+    background: rgba(255,255,255,0.9); color: var(--ad-ink); font-weight: 700; font-size: 12px;
     border: none; cursor: pointer;
   }
   #close:hover { background: #fff; }
@@ -87,7 +95,7 @@
     flex: 1; background: #0f1116; border: 1px solid rgba(255,255,255,0.1); color: #f0f2f7;
     border-radius: 8px; padding: 7px 10px; font-size: 13px; outline: none;
   }
-  #msg:focus { border-color: #ff8f3d; }
+  #msg:focus { border-color: var(--ad-2); }
   #hint { color: #6b7280; font-size: 11px; min-width: 54px; text-align: right; }
   #hint.err { color: #f2777a; }
 
@@ -101,8 +109,8 @@
 </head>
 <body>
   <div id="bar">
-    <span class="tag">推广</span>
-    <span class="copy">限时特惠 · 新用户专享 0 元购</span>
+    <span class="tag" id="tag">推广</span>
+    <span class="copy" id="copy">限时特惠 · 新用户专享 0 元购</span>
     <span class="grow"></span>
     <button id="dim" title="降低不透明度">透明−</button>
     <span id="pct">100%</span>
@@ -117,9 +125,9 @@
   <div id="stage">
     <iframe id="frame" src="http://127.0.0.1:8731/?embed=1&bare=1" allow="autoplay"></iframe>
     <div id="promo">
-      <span class="p1">限时秒杀</span>
-      <span class="p2">距结束 <b id="clock">02:31:12</b></span>
-      <span class="cta2">立即抢购</span>
+      <span class="p1" id="p1">限时秒杀</span>
+      <span class="p2" id="p2">距结束 <b id="clock">02:31:12</b></span>
+      <span class="cta2" id="cta">立即抢购</span>
     </div>
     <div id="admark">广告</div>
   </div>
@@ -133,13 +141,52 @@
   const $ = (id) => document.getElementById(id);
   const api = window.moyuDesktop;
 
+  const SKINS = {
+    promo: {
+      tag: '推广',
+      copy: '限时特惠 · 新用户专享 0 元购',
+      p1: '限时秒杀',
+      p2: '距结束',
+      cta: '立即抢购',
+    },
+    bug: {
+      tag: '广告',
+      copy: '拜耳 · 专业除蟑 · 一窝端',
+      p1: '一窝端',
+      p2: '药效持续',
+      cta: '立即购买',
+    },
+  };
+
+  let skin = 'promo';
+
+  function applySkin(next) {
+    skin = SKINS[next] ? next : 'promo';
+    document.body.classList.toggle('skin-bug', skin === 'bug');
+    const cfg = SKINS[skin];
+    $('tag').textContent = cfg.tag;
+    $('copy').textContent = cfg.copy;
+    $('p1').textContent = cfg.p1;
+    $('p2').childNodes[0].textContent = cfg.p2 + ' ';
+    $('cta').textContent = cfg.cta;
+    try {
+      frameEl.contentWindow.postMessage({ type: 'moyu:skin', skin }, '*');
+    } catch {}
+  }
+
   function paint(state) {
     $('pct').textContent = Math.round(state.opacity * 100) + '%';
     $('top').classList.toggle('on', state.alwaysOnTop);
+    if (state.skin && state.skin !== skin) applySkin(state.skin);
   }
 
   api.state().then(paint);
   api.onState(paint);
+
+  const frameEl = $('frame');
+  frameEl.addEventListener('load', () => {
+    setTimeout(() => applySkin(skin), 350);
+  });
 
   $('dim').onclick = () => api.opacity(-0.1).then(paint);
   $('bright').onclick = () => api.opacity(0.1).then(paint);
@@ -147,7 +194,6 @@
   $('listen').onclick = () => api.listen();
 
   // 侧栏广告：竖屏开、横屏关，状态记在本地
-  const frameEl = $('frame');
   let sideOn = localStorage.getItem('moyu.sideads') === '1';
   function paintSide() {
     $('side').classList.toggle('on', sideOn);

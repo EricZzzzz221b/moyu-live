@@ -81,14 +81,18 @@ const HOTKEY = {
   dimmer: 'CommandOrControl+Shift+[',
   brighter: 'CommandOrControl+Shift+]',
   onTop: 'CommandOrControl+Shift+T',
+  skinPromo: 'CommandOrControl+Shift+1',
+  skinBug: 'CommandOrControl+Shift+2',
 };
+
+const SKINS = ['promo', 'bug'];
 
 let playerWin = null;
 let inputWin = null;
 let tray = null;
 let quitting = false;
 
-const settings = { opacity: 1, alwaysOnTop: true, bounds: null };
+const settings = { opacity: 1, alwaysOnTop: true, bounds: null, skin: 'promo' };
 const settingsFile = () => path.join(app.getPath('userData'), 'settings.json');
 
 function loadSettings() {
@@ -336,7 +340,16 @@ function pushState() {
   playerWin.webContents.send('moyu:state', {
     opacity: settings.opacity,
     alwaysOnTop: settings.alwaysOnTop,
+    skin: settings.skin,
   });
+}
+
+function setSkin(skin) {
+  if (!SKINS.includes(skin)) return;
+  settings.skin = skin;
+  saveSettings();
+  pushState();
+  buildTray();
 }
 
 ipcMain.handle('moyu:opacity', (_event, delta) => {
@@ -352,6 +365,7 @@ ipcMain.handle('moyu:top', () => {
 ipcMain.handle('moyu:state', () => ({
   opacity: settings.opacity,
   alwaysOnTop: settings.alwaysOnTop,
+  skin: settings.skin,
 }));
 
 let currentInteractive = null;
@@ -551,6 +565,8 @@ if (!app.requestSingleInstanceLock()) {
     bind(HOTKEY.dimmer, () => adjustOpacity(-0.1));
     bind(HOTKEY.brighter, () => adjustOpacity(0.1));
     bind(HOTKEY.onTop, toggleOnTop);
+    bind(HOTKEY.skinPromo, () => setSkin('promo'));
+    bind(HOTKEY.skinBug, () => setSkin('bug'));
 
     if (playerWin) {
       playerWin.webContents.on('did-finish-load', () => console.log('[moyu] 播放页加载完成'));

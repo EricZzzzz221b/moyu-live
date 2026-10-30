@@ -98,6 +98,11 @@
   body.bare header, body.bare footer { display: none; }
   body.bare main { padding: 0; }
   body.bare #stage { width: 100%; height: 100%; max-height: none; aspect-ratio: auto; border-radius: 0; }
+  body.skin-bug .side-ad {
+    background: linear-gradient(180deg, #0a5f2c 0%, #1a8f47 45%, #46b96a 100%);
+  }
+  body.skin-bug .side-ad .btn { color: #0a5f2c; }
+
   .side-ad {
     position: absolute; top: 0; bottom: 0; z-index: 5; display: none;
     flex-direction: column; align-items: center; justify-content: center; gap: 10px;
@@ -232,7 +237,17 @@ function toast(msg, kind) {
   el._t = setTimeout(() => { el.className = ''; }, 3200);
 }
 
+let myBuild = 0;
+
 function renderState(s) {
+  // 页面文件更新了（守护进程重启后 buildId 会变）→ 自己刷新，省得手动按
+  if (s.buildId) {
+    if (!myBuild) myBuild = s.buildId;
+    else if (s.buildId !== myBuild) {
+      location.reload();
+      return;
+    }
+  }
   state = s;
   $('dot').className = 'dot ' + (s.live ? 'live' : 'off');
   $('title').textContent = s.title || ('房间 ' + s.roomId);
@@ -350,6 +365,43 @@ function attach(s) {
   attachHls(s.playUrl);
 }
 
+// 画面看门狗：FLV 连接会静默失效（没有 error 事件），画面就停住不动了。
+// 连续 6 秒 currentTime 不前进就重连，连续多次失败则退回 HLS。
+let lastTime = -1;
+let lastAdvance = Date.now();
+let stalls = 0;
+
+setInterval(() => {
+  if (!state || !state.live) {
+    lastAdvance = Date.now();
+    return;
+  }
+  if (video.paused) {
+    lastAdvance = Date.now();
+    return;
+  }
+  if (video.currentTime !== lastTime) {
+    lastTime = video.currentTime;
+    lastAdvance = Date.now();
+    if (stalls > 0 && video.readyState >= 2) stalls = 0;
+    return;
+  }
+  if (Date.now() - lastAdvance < 6000) return;
+
+  lastAdvance = Date.now();
+  stalls += 1;
+  console.warn('[moyu] 画面停滞，第', stalls, '次重连');
+  if (stalls >= 3 && state.playUrl) {
+    console.warn('[moyu] 多次重连失败，退回 HLS');
+    sourceMode = 'HLS';
+    teardown();
+    attachHls(state.playUrl);
+    stalls = 0;
+    return;
+  }
+  attach(state);
+}, 2000);
+
 setInterval(() => {
   const el = $('src');
   if (!el) return;
@@ -397,6 +449,21 @@ window.addEventListener('message', (e) => {
   if (type === 'moyu:play') video.play().catch(() => {});
   if (type === 'moyu:unmute') { video.muted = false; video.play().catch(() => {}); }
   if (type === 'moyu:mute') video.muted = true;
+  if (type === 'moyu:skin') {
+    const bug = e.data.skin === 'bug';
+    document.body.classList.toggle('skin-bug', bug);
+    const paint = (root, vtext, price, btn) => {
+      if (!root) return;
+      const v = root.querySelector('.vtext');
+      const p = root.querySelector('.price');
+      const b = root.querySelector('.btn');
+      if (v) v.textContent = vtext;
+      if (p) p.innerHTML = price;
+      if (b) b.textContent = btn;
+    };
+    paint($('adL'), bug ? '一 窝 端' : '限 时 秒 杀', bug ? '¥9.9' : '¥0', bug ? '去买' : '立即抢');
+    paint($('adR'), bug ? '连 窝 端' : '新 人 专 享', bug ? '¥9.9' : '¥0', bug ? '去买' : '去领取');
+  }
   if (type === 'moyu:sideads') {
     sideAds = Boolean(e.data.on);
     layoutSideAds();

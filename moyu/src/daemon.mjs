@@ -231,8 +231,13 @@ export async function startDaemon({ roomId, jar, port = 8731, log = () => {} }) 
         return serveFile(res, path.join(PUBLIC, 'hls.min.js'), 'text/javascript; charset=utf-8');
       }
       if (url.pathname === '/api/state') {
+        let buildId = 0;
+        try {
+          buildId = fs.statSync(path.join(PUBLIC, 'index.html')).mtimeMs;
+        } catch {}
         return json(res, {
           ...state,
+          buildId,
           jarOk: Boolean(jar.SESSDATA && jar.bili_jct),
           desktopOnline: desktopOnline(),
         });
